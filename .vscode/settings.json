@@ -1,0 +1,6 @@
+{
+  "python.defaultInterpreterPath": "C:/proyWebLuis/environments/gestion_escolar_api/Scripts/python.exe",
+  "python.analysis.extraPaths": [
+    "./"
+  ]
+}
