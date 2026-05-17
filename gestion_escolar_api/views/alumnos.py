@@ -1,70 +1,74 @@
-from django.db.models import *
 from django.db import transaction
-from gestion_escolar_api.models import Administradores, Maestros
-from gestion_escolar_api.serializers import UserSerializer
-from gestion_escolar_api.serializers import *
-from gestion_escolar_api.models import *
-from rest_framework import permissions
-from rest_framework import generics
-from rest_framework import status
+from rest_framework import generics, permissions, status
 from rest_framework.response import Response
-from django.contrib.auth.models import Group
-from django.shortcuts import get_object_or_404
-import json
+from django.contrib.auth.models import User
+
+from gestion_escolar_api.models import Alumnos
+from gestion_escolar_api.serializers import AlumnosSerializer, UserSerializer
+from .users import _missing_fields, _upper_or_none, _create_user_with_role
+
+
+class AlumnosAll(generics.CreateAPIView):
+    permission_classes = (permissions.IsAuthenticated,)
+
+    def get(self, request, *args, **kwargs):
+        alumnos = Alumnos.objects.all().order_by("-id")
+        serializer = AlumnosSerializer(alumnos, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
 
 class AlumnosView(generics.CreateAPIView):
-    # Permisos por método (sobrescribe el comportamiento default)
-    # Verifica que el usuario esté autenticado para las peticiones GET, PUT y DELETE
     def get_permissions(self):
-        if self.request.method in ['GET', 'PUT', 'DELETE']:
+        if self.request.method in ["GET", "PUT", "DELETE"]:
             return [permissions.IsAuthenticated()]
-        return []  # POST no requiere autenticación
-    
-    #Registrar nuevo usuario
+        return []
+
     @transaction.atomic
     def post(self, request, *args, **kwargs):
-
         user = UserSerializer(data=request.data)
+        required_fields = [
+            "rol",
+            "first_name",
+            "last_name",
+            "email",
+            "password",
+            "id_alumno",
+            "fecha_nacimiento",
+            "telefono",
+            "curp",
+            "carrera",
+            "materias_json",
+        ]
+        missing = _missing_fields(request.data, required_fields)
+
+        if missing:
+            return Response(
+                {"message": "Faltan campos requeridos", "missing_fields": missing},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         if user.is_valid():
-            #Grab user data
-            role = request.data['rol']
-            first_name = request.data['first_name']
-            last_name = request.data['last_name']
-            email = request.data['email']
-            password = request.data['password']
-            #Valida si existe el usuario o bien el email registrado
-            existing_user = User.objects.filter(email=email).first()
+            email = request.data["email"]
+            role = request.data["rol"]
+            id_alumno = request.data["id_alumno"]
 
-            if existing_user:
-                return Response({"message":"Username "+email+", is already taken"},400)
+            if User.objects.filter(email=email).exists():
+                return Response({"message": "Nombre de usuario " + email + ", ya existe"}, 400)
 
-            user = User.objects.create( username = email,
-                                        email = email,
-                                        first_name = first_name,
-                                        last_name = last_name,
-                                        is_active = 1)
+            if Alumnos.objects.filter(id_alumno=id_alumno).exists():
+                return Response({"message": "La matricula " + id_alumno + " ya existe"}, 400)
 
+            user = _create_user_with_role(request.data, role)
+            alumno = Alumnos.objects.create(
+                user=user,
+                id_alumno=id_alumno,
+                fecha_nacimiento=request.data["fecha_nacimiento"],
+                telefono=request.data["telefono"],
+                curp=_upper_or_none(request.data.get("curp")),
+                carrera=request.data["carrera"],
+                materias_json=request.data["materias_json"],
+            )
 
-            user.save()
-            user.set_password(password)
-            user.save()
-
-            group, created = Group.objects.get_or_create(name=role)
-            group.user_set.add(user)
-            user.save()
-
-            #Create a profile for the user
-            alumno = Alumnos.objects.create(user=user,
-                                            matricula= request.data["matricula"],
-                                            curp= request.data["curp"].upper(),
-                                            rfc= request.data["rfc"].upper(),
-                                            fecha_nacimiento= request.data["fecha_nacimiento"],
-                                            edad= request.data["edad"],
-                                            telefono= request.data["telefono"],
-                                            ocupacion= request.data["ocupacion"])
-            alumno.save()
-
-            return Response({"Alumno creado con ID= ": alumno.id }, 201)
+            return Response({"Alumno creado ID": alumno.id}, status=status.HTTP_201_CREATED)
 
         return Response(user.errors, status=status.HTTP_400_BAD_REQUEST)
-
