@@ -1,3 +1,5 @@
+import json
+
 from django.db import transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -9,12 +11,13 @@ from .users import _missing_fields, _upper_or_none, _create_user_with_role, _cal
 
 
 class MaestrosAll(generics.CreateAPIView):
+    #Obtener todos los maestros
+    # Necesita permisos de autenticación de usuario para poder acceder a la petición
     permission_classes = (permissions.IsAuthenticated,)
-
     def get(self, request, *args, **kwargs):
-        maestros = Maestros.objects.all().order_by("-id")
-        serializer = MaestrosSerializer(maestros, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        maestros = Maestros.objects.filter(user__is_active=1).order_by("id")
+        lista = MaestrosSerializer(maestros, many=True).data
+        return Response(lista, 200)
 
 
 class MaestrosView(generics.CreateAPIView):
@@ -26,9 +29,7 @@ class MaestrosView(generics.CreateAPIView):
     @transaction.atomic
     def post(self, request, *args, **kwargs):
         user = UserSerializer(data=request.data)
-        materias_json = request.data.get("materias_json", request.data.get("materias_array"))
         payload = dict(request.data)
-        payload["materias_json"] = materias_json
         required_fields = [
             "rol",
             "first_name",
@@ -73,7 +74,7 @@ class MaestrosView(generics.CreateAPIView):
                 cubiculo=payload["cubiculo"],
                 edad=edad_calculada,
                 area_investigacion=payload["area_investigacion"],
-                materias_json=materias_json,
+                materias_json=payload["materias_json"],
             )
 
             return Response({"Maestro creado ID": maestro.id}, status=status.HTTP_201_CREATED)

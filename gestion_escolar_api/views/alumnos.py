@@ -1,3 +1,5 @@
+import json
+
 from django.db import transaction
 from rest_framework import generics, permissions, status
 from rest_framework.response import Response
@@ -9,12 +11,13 @@ from .users import _missing_fields, _upper_or_none, _create_user_with_role
 
 
 class AlumnosAll(generics.CreateAPIView):
+    #Obtener todos los alumnos
+    # Necesita permisos de autenticación de usuario para poder acceder a la petición
     permission_classes = (permissions.IsAuthenticated,)
-
     def get(self, request, *args, **kwargs):
-        alumnos = Alumnos.objects.all().order_by("-id")
-        serializer = AlumnosSerializer(alumnos, many=True)
-        return Response(serializer.data, status=status.HTTP_200_OK)
+        alumnos = Alumnos.objects.filter(user__is_active=1).order_by("id")
+        lista = AlumnosSerializer(alumnos, many=True).data
+        return Response(lista, 200)
 
 
 class AlumnosView(generics.CreateAPIView):
@@ -72,3 +75,4 @@ class AlumnosView(generics.CreateAPIView):
             return Response({"Alumno creado ID": alumno.id}, status=status.HTTP_201_CREATED)
 
         return Response(user.errors, status=status.HTTP_400_BAD_REQUEST)
+    
