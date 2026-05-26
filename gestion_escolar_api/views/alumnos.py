@@ -25,6 +25,14 @@ class AlumnosView(generics.CreateAPIView):
         if self.request.method in ["GET", "PUT", "DELETE"]:
             return [permissions.IsAuthenticated()]
         return []
+    
+#Obtener un Alumno específico por su ID
+    def get(self, request, *args, **kwargs):
+        alumno = Alumnos.objects.filter(id=request.GET.get("id"), user__is_active=1).first()
+        if not alumno:
+            return Response({"message": "Alumno no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        serializer = AlumnosSerializer(alumno)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @transaction.atomic
     def post(self, request, *args, **kwargs):
@@ -76,3 +84,28 @@ class AlumnosView(generics.CreateAPIView):
 
         return Response(user.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    
+    # Actualizar datos del alumno
+    @transaction.atomic
+    def put(self, request, *args, **kwargs):
+        alumno = Alumnos.objects.filter(id=request.data["id"], user__is_active=1).first()
+        if not alumno:
+            return Response({"message": "Alumno no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+
+        user = alumno.user
+        # Actualizar campos del usuario
+        user.first_name = request.data["first_name"]
+        user.last_name = request.data["last_name"]
+        #No es necesario actualizar la contraseña
+        user.save()
+        
+        # Actualizar campos del alumno
+        alumno.id_alumno = request.data["id_alumno"]
+        alumno.fecha_nacimiento = request.data["fecha_nacimiento"]
+        alumno.telefono = request.data["telefono"]
+        alumno.curp = request.data["curp"].upper()
+        alumno.carrera = request.data["carrera"]
+        alumno.materias_json = request.data["materias_json"]
+        alumno.save()
+
+        return Response({"message": "Alumno actualizado correctamente"}, status=status.HTTP_200_OK)
