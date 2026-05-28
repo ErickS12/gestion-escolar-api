@@ -8,7 +8,7 @@ from django.contrib.auth.models import User
 from gestion_escolar_api.models import Alumnos
 from gestion_escolar_api.serializers import AlumnosSerializer, UserSerializer
 from .users import _missing_fields, _upper_or_none, _create_user_with_role
-
+from django.shortcuts import get_object_or_404
 
 class AlumnosAll(generics.CreateAPIView):
     #Obtener todos los alumnos
@@ -109,3 +109,14 @@ class AlumnosView(generics.CreateAPIView):
         alumno.save()
 
         return Response({"message": "Alumno actualizado correctamente"}, status=status.HTTP_200_OK)
+    
+    
+    #Función para eliminar un alumno específico por su ID
+    @transaction.atomic
+    def delete(self, request, *args, **kwargs):
+        alumno = get_object_or_404(Alumnos, id=request.GET.get("id"))
+        try:
+            alumno.user.delete()
+            return Response({"details":"Alumno eliminado"},200)
+        except Exception as e:
+            return Response({"details":"Error al eliminar alumno"},400)

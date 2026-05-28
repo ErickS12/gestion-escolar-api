@@ -8,6 +8,7 @@ from django.contrib.auth.models import User
 from gestion_escolar_api.models import Maestros
 from gestion_escolar_api.serializers import MaestrosSerializer, UserSerializer
 from .users import _missing_fields, _upper_or_none, _create_user_with_role, _calculate_age
+from django.shortcuts import get_object_or_404
 
 
 class MaestrosAll(generics.CreateAPIView):
@@ -89,7 +90,7 @@ class MaestrosView(generics.CreateAPIView):
         return Response(user.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
-    # Actualizar datos del maestro
+    # Actualizar datos del maestro por su id 
     @transaction.atomic
     def put(self, request, *args, **kwargs):
         maestro = Maestros.objects.filter(id=request.data["id"], user__is_active=1).first()
@@ -114,3 +115,13 @@ class MaestrosView(generics.CreateAPIView):
         maestro.save()
 
         return Response({"message": "Maestro actualizado correctamente"}, status=status.HTTP_200_OK)
+    
+    #Función para eliminar un maestro específico por su ID
+    @transaction.atomic
+    def delete(self, request, *args, **kwargs):
+        maestro = get_object_or_404(Maestros, id=request.GET.get("id"))
+        try:
+            maestro.user.delete()
+            return Response({"details":"Maestro eliminado"},200)
+        except Exception as e:
+            return Response({"details":"Error al eliminar maestro"},400)
