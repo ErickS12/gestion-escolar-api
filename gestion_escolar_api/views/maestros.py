@@ -37,33 +37,11 @@ class MaestrosView(generics.CreateAPIView):
     @transaction.atomic
     def post(self, request, *args, **kwargs):
         user = UserSerializer(data=request.data)
-        payload = dict(request.data)
-        required_fields = [
-            "rol",
-            "first_name",
-            "last_name",
-            "email",
-            "password",
-            "id_trabajador",
-            "fecha_nacimiento",
-            "telefono",
-            "rfc",
-            "cubiculo",
-            "area_investigacion",
-            "materias_json",
-        ]
-        missing = _missing_fields(payload, required_fields)
-
-        if missing:
-            return Response(
-                {"message": "Faltan campos requeridos", "missing_fields": missing},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         if user.is_valid():
-            email = payload["email"]
-            role = payload["rol"]
-            id_trabajador = payload["id_trabajador"]
+            email = request.data["email"]
+            role = request.data["rol"]
+            id_trabajador = request.data["id_trabajador"]
 
             if User.objects.filter(email=email).exists():
                 return Response({"message": "Nombre de usuario " + email + ", ya existe"}, 400)
@@ -71,18 +49,20 @@ class MaestrosView(generics.CreateAPIView):
             if Maestros.objects.filter(id_trabajador=id_trabajador).exists():
                 return Response({"message": "El id de trabajador " + id_trabajador + " ya existe"}, 400)
 
-            user = _create_user_with_role(payload, role)
-            edad_calculada = _calculate_age(payload["fecha_nacimiento"])
+            user = _create_user_with_role(request.data, role)
+            edad_calculada = _calculate_age(request.data["fecha_nacimiento"])
             maestro = Maestros.objects.create(
                 user=user,
                 id_trabajador=id_trabajador,
-                fecha_nacimiento=payload["fecha_nacimiento"],
-                telefono=payload["telefono"],
-                rfc=_upper_or_none(payload.get("rfc")),
-                cubiculo=payload["cubiculo"],
+                fecha_nacimiento=request.data["fecha_nacimiento"],
+                telefono=request.data["telefono"],
+                rfc=_upper_or_none(request.data.get("rfc")),
+                cubiculo=request.data["cubiculo"],
                 edad=edad_calculada,
-                area_investigacion=payload["area_investigacion"],
-                materias_json=payload["materias_json"],
+                area_investigacion=request.data["area_investigacion"],
+                materias_json=request.data["materias_json"],
+                campus=request.data["campus"],
+                sueldo_estimado=request.data["sueldo_estimado"],
             )
 
             return Response({"Maestro creado ID": maestro.id}, status=status.HTTP_201_CREATED)
@@ -112,6 +92,8 @@ class MaestrosView(generics.CreateAPIView):
         maestro.cubiculo = request.data["cubiculo"]
         maestro.area_investigacion = request.data["area_investigacion"]
         maestro.materias_json = request.data["materias_json"]
+        maestro.campus = request.data["campus"]
+        maestro.sueldo_estimado = request.data["sueldo_estimado"]
         maestro.save()
 
         return Response({"message": "Maestro actualizado correctamente"}, status=status.HTTP_200_OK)

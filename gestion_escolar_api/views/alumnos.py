@@ -37,26 +37,6 @@ class AlumnosView(generics.CreateAPIView):
     @transaction.atomic
     def post(self, request, *args, **kwargs):
         user = UserSerializer(data=request.data)
-        required_fields = [
-            "rol",
-            "first_name",
-            "last_name",
-            "email",
-            "password",
-            "id_alumno",
-            "fecha_nacimiento",
-            "telefono",
-            "curp",
-            "carrera",
-            "materias_json",
-        ]
-        missing = _missing_fields(request.data, required_fields)
-
-        if missing:
-            return Response(
-                {"message": "Faltan campos requeridos", "missing_fields": missing},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         if user.is_valid():
             email = request.data["email"]
@@ -78,6 +58,8 @@ class AlumnosView(generics.CreateAPIView):
                 curp=_upper_or_none(request.data.get("curp")),
                 carrera=request.data["carrera"],
                 materias_json=request.data["materias_json"],
+                direccion=request.data["direccion"],
+                sexo=request.data["sexo"],
             )
 
             return Response({"Alumno creado ID": alumno.id}, status=status.HTTP_201_CREATED)
@@ -106,6 +88,8 @@ class AlumnosView(generics.CreateAPIView):
         alumno.curp = request.data["curp"].upper()
         alumno.carrera = request.data["carrera"]
         alumno.materias_json = request.data["materias_json"]
+        alumno.direccion = request.data["direccion"]
+        alumno.sexo = request.data["sexo"]
         alumno.save()
 
         return Response({"message": "Alumno actualizado correctamente"}, status=status.HTTP_200_OK)

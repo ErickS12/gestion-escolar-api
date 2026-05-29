@@ -51,7 +51,7 @@ def _calculate_age(birth_date):
     age = today.year - birth_date.year - ((today.month, today.day) < (birth_date.month, birth_date.day))
     return age
 
-
+# Función para crear un usuario y asignarle un rol específico (grupo)
 def _create_user_with_role(data, role_name):
     email = data["email"]
     user = User.objects.create(
@@ -64,7 +64,8 @@ def _create_user_with_role(data, role_name):
     user.set_password(data["password"])
     user.save()
 
-    group, _ = Group.objects.get_or_create(name=role_name)
+    # Asignar el usuario al grupo correspondiente según su rol
+    group, _ = Group.objects.get_or_create(name=role_name) 
     group.user_set.add(user)
     user.save()
     return user
@@ -99,25 +100,6 @@ class AdminView(generics.CreateAPIView):
     @transaction.atomic
     def post(self, request, *args, **kwargs):
         user = UserSerializer(data=request.data)
-        required_fields = [
-            "rol",
-            "first_name",
-            "last_name",
-            "email",
-            "password",
-            "clave_admin",
-            "telefono",
-            "rfc",
-            "edad",
-            "ocupacion",
-        ]
-        missing = _missing_fields(request.data, required_fields)
-
-        if missing:
-            return Response(
-                {"message": "Faltan campos requeridos", "missing_fields": missing},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
 
         if user.is_valid():
             role = request.data["rol"]
@@ -127,7 +109,11 @@ class AdminView(generics.CreateAPIView):
             if existing_user:
                 return Response({"message": "Nombre de usuario " + email + ", ya existe"}, 400)
 
+
+            #Aqui creamos el usuario y lo asignamos al grupo correspondiente según su rol, luego creamos el administrador con los datos adicionales requeridos
             user = _create_user_with_role(request.data, role)
+            
+            #Almacenamos el nuevo administrador en la base de datos con los datos adicionales requeridos para el modelo Administradores
             admin = Administradores.objects.create(
                 user=user,
                 clave_admin=request.data["clave_admin"],
@@ -135,6 +121,8 @@ class AdminView(generics.CreateAPIView):
                 rfc=_upper_or_none(request.data.get("rfc")),
                 edad=request.data["edad"],
                 ocupacion=request.data["ocupacion"],
+                categoria=request.data["categoria"],
+                grado_academico=request.data["grado_academico"],
             )
 
             return Response({"Administrador creado ID": admin.id}, status=status.HTTP_201_CREATED)
@@ -142,7 +130,7 @@ class AdminView(generics.CreateAPIView):
         return Response(user.errors, status=status.HTTP_400_BAD_REQUEST)
     
     
-        # Actualizar datos del administrador
+        # Función para actualizar un administrador específico por su ID
     @transaction.atomic
     def put(self, request, *args, **kwargs):
         admin = Administradores.objects.filter(id=request.data["id"], user__is_active=1).first()
@@ -162,6 +150,8 @@ class AdminView(generics.CreateAPIView):
         admin.rfc = request.data["rfc"].upper()
         admin.edad = request.data["edad"]
         admin.ocupacion = request.data["ocupacion"]
+        admin.categoria = request.data["categoria"]
+        admin.grado_academico = request.data["grado_academico"]
         admin.save()
 
         return Response({"message": "Administrador actualizado correctamente"}, status=status.HTTP_200_OK)
@@ -172,11 +162,15 @@ class AdminView(generics.CreateAPIView):
         admin = Administradores.objects.filter(id=request.GET.get("id"), user__is_active=1).first()
         if not admin:
             return Response({"message": "Administrador no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        # VALIDACIÓN: No permitir que se desactive a sí mismo
+        if admin.user.id == request.user.id:
+            return Response({"message": "No puedes desactivar tu propia cuenta"}, status=status.HTTP_403_FORBIDDEN)
+        
         try:
             admin.user.delete()
             return Response({"details":"Administrador eliminado"},200)
         except Exception as e:
-            return Response({"details":"Error al eliminar administrador"},400)
+            return Response({"details":"No puede eliminar su propia cuenta"},400)
         
     #Función para desactivar un administrador específico por su ID
     @transaction.atomic
@@ -184,6 +178,11 @@ class AdminView(generics.CreateAPIView):
         admin = Administradores.objects.filter(id=request.data["id"], user__is_active=1).first()
         if not admin:
             return Response({"message": "Administrador no encontrado"}, status=status.HTTP_404_NOT_FOUND)
+        
+    # VALIDACIÓN: No permitir que se desactive a sí mismo
+        if admin.user.id == request.user.id:
+            return Response({"message": "No puedes desactivar tu propia cuenta"}, status=status.HTTP_403_FORBIDDEN)
+        
         try:
             admin.user.is_active = False
             admin.user.save()
@@ -191,3 +190,21 @@ class AdminView(generics.CreateAPIView):
         except Exception as e:
             return Response({"details":"Error al desactivar administrador"},400)
 
+
+
+class TotalUsuarios(generics.CreateAPIView):
+    #Primero verificamos que el usuario esté autenticado para acceder a esta vista
+    permission_classes = (permissions.IsAuthenticated,)
+    def get(self, request, *args, **kwargs):
+        total_admins = Administradores.objects.filter(user__is_active=1).count()
+        total_maestros = Maestros.objects.filter(user__is_active=1).count()
+        total_alumnos = Alumnos.objects.filter(user__is_active=1).count()
+        #En caso de error, se puede manejar con un bloque try-except para capturar cualquier excepción que pueda ocurrir durante la consulta a la base de datos y devolver una respuesta adecuada.
+        try:
+            return Response({
+                "total_admins": total_admins,
+                "total_maestros": total_maestros,
+                "total_alumnos": total_alumnos
+            }, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({"details":"Error al obtener el total de usuarios"},400)
